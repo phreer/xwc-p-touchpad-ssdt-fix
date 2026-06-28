@@ -1,0 +1,52 @@
+#!/usr/bin/bash
+#
+# kernel-install hook: keep the HONOR XWC-P touchpad ACPI fix applied after every
+# kernel install/upgrade.
+#
+# How it works: after 90-loaderentry.install generates the BLS entry, this hook
+# prepends the ACPI override image /boot/acpi-touchpad-override.img to that
+# kernel's initrd line (it MUST come before the main initramfs for the kernel to
+# treat it as an ACPI table upgrade).
+#
+# Modeled on /usr/lib/kernel/install.d/92-tuned.install. grub2 + BLS only.
+#
+# Install: see install.sh in this directory.
+
+COMMAND="$1"
+KERNEL_VERSION="$2"
+
+# ACPI override image to prepend (path is relative to /boot, the BLS initrd root)
+ACPI_IMG_NAME="acpi-touchpad-override.img"
+ACPI_IMG_ABS="/boot/${ACPI_IMG_NAME}"
+
+# only handle the 'add' phase
+[ "$COMMAND" = "add" ] || exit 0
+
+# grub2 BLS layout only (UKI / sd-boot take a different path)
+[ "$KERNEL_INSTALL_LAYOUT" = "bls" ] || [ -d /boot/loader/entries ] || exit 0
+
+# if the image is absent, skip (do not break kernel install when the fix isn't set up)
+[ -f "$ACPI_IMG_ABS" ] || { echo "honor-touchpad: ${ACPI_IMG_ABS} not found, skipping" >&2; exit 0; }
+
+[ -n "$KERNEL_INSTALL_MACHINE_ID" ] || exit 0
+LOADER_ENTRIES="/boot/loader/entries"
+[ -d "$LOADER_ENTRIES" ] || exit 0
+
+shopt -s nullglob
+for f in "$LOADER_ENTRIES/$KERNEL_INSTALL_MACHINE_ID-$KERNEL_VERSION"*.conf; do
+    # skip rescue entries
+    case "$f" in *-rescue.conf) continue;; esac
+    # don't inject twice
+    grep -q "/$ACPI_IMG_NAME\b" "$f" && continue
+    # prepend our image before the first value on the initrd line
+    #   initrd /initramfs-X.img ...   ->   initrd /acpi-touchpad-override.img /initramfs-X.img ...
+    if grep -qE '^[[:space:]]*initrd[[:space:]]' "$f"; then
+        sed -i -E "0,/^([[:space:]]*initrd[[:space:]]+)/s//\1\/${ACPI_IMG_NAME} /" "$f"
+        echo "honor-touchpad: injected /${ACPI_IMG_NAME} into $(basename "$f")" >&2
+    else
+        # rare: entry without an initrd line -> add one after the linux line
+        sed -i -E "0,/^([[:space:]]*linux[[:space:]].*)$/s//\1\ninitrd \/${ACPI_IMG_NAME}/" "$f"
+        echo "honor-touchpad: added initrd line with /${ACPI_IMG_NAME} to $(basename "$f")" >&2
+    fi
+done
+exit 0
