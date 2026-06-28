@@ -81,6 +81,7 @@ Press `Ctrl+X` to boot (affects this boot only). Other options: tuned's
 | File | Purpose |
 |------|---------|
 | `acpi-touchpad-override.img` | prebuilt initrd ACPI-override image (install this) |
+| `ssdt-I2C_DEVT.patch` | the original SSDT |
 | `ssdt-touchpad.asl` / `.aml` | the fixed SSDT, source / compiled |
 | `ssdt-touchpad.patch` | the one-line fix vs. the original SSDT |
 | `install.sh` / `uninstall.sh` | Fedora grub2+BLS installer / uninstaller |
