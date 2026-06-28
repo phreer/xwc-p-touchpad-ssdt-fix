@@ -7,7 +7,7 @@ enumerate and work normally.
 - Touchpad: `TOPS0102` / I2C-HID, on i2c bus `\_SB.PC00.I2C1` @ `0x5D`.
 - Tested on Fedora (kernel 7.0.x). Works with libinput / Wayland / Xorg.
 
-For those who want to understand the details, please read [the complete root cause analysis](./full-analysis.md). Note that the guide in this README only applies variant C of all three fixes described in the complate analysis, and only prebuilt files for variant C are included in this repo. If you want to try other variants, you will need to build the SSDT and initrd override image yourself.
+For those who want to understand the details, please read [the complete root cause analysis](./full-analysis.md). Note that the guide in this README only applies variant C of all three fixes described in the complete analysis, and only prebuilt files for variant C are included in this repo. If you want to try other variants, you will need to build the SSDT and initrd override image yourself.
 
 ## Cause
 

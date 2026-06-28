@@ -1,8 +1,3 @@
----
-id: full-analysis
-aliases: []
-tags: []
----
 ## Complete root cause analysis of the touchpad issue
 
 The touchpad device `TPD0` (`_HID=TOPS0102` / `_CID=PNP0C50`) is **not** in the
