@@ -6,7 +6,7 @@ tags: []
 ## Complete root cause analysis of the touchpad issue
 
 The touchpad device `TPD0` (`_HID=TOPS0102` / `_CID=PNP0C50`) is **not** in the
-DSDT. It lives in an SSDT named `I2C_DEVT` (`ssdt27` in the acpidump). That table
+DSDT. It lives in an SSDT named `I2C_DEVT` (`ssdt27` by acpidump in my boot). That table
 **fails to load** because of a single line of **module-level** code:
 
 ```asl
@@ -191,12 +191,12 @@ failure` / `AE_AML_INTERNAL` line in dmesg is harmless.
 
 ### Variant C — move one line (DEPLOYED) ★
 
-`ssdt27-C.asl` / `.aml`, image `acpi_override_C.img`, OEM Table ID `I2CDEVC`.
+**This is the deployed fix.**
 
 Move NFC0's module-level `INT1 = GNUM(0x001A088A)` into `NFC0._CRS` (runtime).
 **`TPD0` is left completely untouched** — it keeps the OEM dynamic GPIO
 computation, the original `_STA` (TPDT check), and the original `_HID` logic
-(`TPDT==1 → TOPS0102`). The one-line diff is `ssdt27-C.patch`.
+(`TPDT==1 → TOPS0102`). The one-line diff is `ssdt-touchpad.patch`.
 
 Verified offline: table loads with 0 added failures; the untouched
 `TPD0._INI`/`_CRS` (which still call `INUM/SGRA/SHPO/G_IN → GNUM`) run correctly
@@ -205,17 +205,17 @@ variant. This is the most faithful fix to the OEM design.
 
 ### Variant B — fully static TPD0
 
-`ssdt27-B.asl` / `.aml`, image `acpi_override_B.img`, OEM Table ID `I2CDEVB`.
-
 Removes NFC0's crashing line **and** rewrites `TPD0`'s `_INI/_CRS/_DSM` to
 hardcode all resources (I2C 0x5D, GpioInt pin 35 @ GPI3, HID descriptor 0x0001),
 with `_STA` always `0x0F`. More conservative — nothing touching `GPCS` runs on
 the kernel's enumeration path — but it deviates from the OEM design. Useful as a
 fallback if variant C ever shows a runtime-timing issue on a given firmware.
 
+The patch file is [`I2C_DEVT-variant-B.patch`](./other-fixes/I2C_DEVT-variant-B.patch).
+
 ### Variant A — add a standalone static device TPDX
 
-`tpd-A-new-device.asl` / `.aml`, image `acpi_override_A.img`, OEM Table ID `TPADD`.
+`tpd-A-new-device.asl`.
 
 Adds a brand-new static `TPDX` device under `\_SB.PC00.I2C1`; does **not** touch
 the original table at all. Smallest blast radius, handy to first prove the

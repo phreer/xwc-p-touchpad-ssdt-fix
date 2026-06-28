@@ -1,0 +1,134 @@
+--- ssdt27-original.asl	2026-06-27 20:54:06.800691275 +0800
++++ ssdt27-B.asl	2026-06-27 20:54:06.801691288 +0800
+@@ -1,4 +1,4 @@
+-DefinitionBlock ("", "SSDT", 2, "HONOR", "I2C_DEVT", 0x00001000)
++DefinitionBlock ("", "SSDT", 2, "HONOR", "I2CDEVB", 0x00001000)
+ {
+     External (_SB_.GGOV, MethodObj)    // 1 Arguments
+     External (_SB_.GRXE, MethodObj)    // 2 Arguments
+@@ -477,61 +477,44 @@
+ 
+         Device (TPD0)
+         {
+-            Name (HID2, Zero)
++            // [VARIANT B] Fully static. The original TPD0 _INI/_CRS/_DSM reach
++            // the GPCS package via INUM/SGRA/SHPO/G_IN -> GNUM -> GINF, which
++            // triggers "No pointer back to namespace node" / AE_AML_INTERNAL on
++            // this firmware. Replaced with hardcoded resources (acpiexec runtime
++            // measurements): I2C1 @ 0x5D, GpioInt Level/ActiveLow pin 0x23(35) on
++            // \_SB.GPI3, HID descriptor register 0x0001. No GPIO calc methods.
+             Name (SBFB, ResourceTemplate ()
+             {
+                 I2cSerialBusV2 (0x005D, ControllerInitiated, 0x00061A80,
+                     AddressingMode7Bit, "\\_SB.PC00.I2C1",
+-                    0x00, ResourceConsumer, _Y06, Exclusive,
++                    0x00, ResourceConsumer, , Exclusive,
+                     )
++                GpioInt (Level, ActiveLow, ExclusiveAndWake, PullDefault, 0x0000,
++                    "\\_SB.GPI3", 0x00, ResourceConsumer, ,
++                    )
++                    {   // Pin list
++                        0x0023
++                    }
+             })
+-            Name (SBFI, ResourceTemplate ()
+-            {
+-                Interrupt (ResourceConsumer, Level, ActiveLow, ExclusiveAndWake, ,, _Y07)
+-                {
+-                    0x00000000,
+-                }
+-            })
+-            CreateWordField (SBFB, \_SB.PC00.I2C1.TPD0._Y06._ADR, BADR)  // _ADR: Address
+-            CreateDWordField (SBFB, \_SB.PC00.I2C1.TPD0._Y06._SPE, SPED)  // _SPE: Speed
+-            CreateDWordField (SBFI, \_SB.PC00.I2C1.TPD0._Y07._INT, INT2)  // _INT: Interrupts
+-            Method (_INI, 0, NotSerialized)  // _INI: Initialize
+-            {
+-                INT2 = INUM (DerefOf (TPDI [Zero]))
+-                If ((DerefOf (TPTD [0x05]) == Zero))
+-                {
+-                    SHPO (DerefOf (TPDI [Zero]), One)
+-                }
+ 
+-                SGRA (DerefOf (TPDI [Zero]), TPDM)
+-                If ((DerefOf (TPTD [0x05]) == One))
+-                {
+-                    SGII (DerefOf (TPDI [Zero]), Zero)
+-                    GRXE (DerefOf (TPDI [Zero]), Zero)
+-                }
+-
+-                If ((TPDT == One))
+-                {
+-                    _HID = "TOPS0102"
+-                    HID2 = One
+-                    BADR = 0x5D
+-                }
+-            }
+-
+-            Name (_HID, "PNP0C50" /* HID Protocol Device (I2C bus) */)  // _HID: Hardware ID
++            Name (_HID, "TOPS0102")  // _HID: Hardware ID
+             Name (_CID, "PNP0C50" /* HID Protocol Device (I2C bus) */)  // _CID: Compatible ID
+             Name (_S0W, 0x03)  // _S0W: S0 Device Wake State
++
+             Method (_DSM, 4, Serialized)  // _DSM: Device-Specific Method
+             {
+                 If ((Arg0 == HIDG))
+                 {
+-                    Return (HOID (Arg0, Arg1, Arg2, Arg3, HID2))
+-                }
+-
+-                If ((Arg0 == TP7G))
+-                {
+-                    Return (TP7D (Arg0, Arg1, Arg2, Arg3, SBFB, G_IN (DerefOf (TPDI [Zero]
+-                        ), Zero, One, 0x02, Zero, Zero)))
++                    // function 0: supported-functions bitmap (bit0 + bit1)
++                    If ((ToInteger (Arg2) == Zero))
++                    {
++                        Return (Buffer (One) { 0x03 })
++                    }
++                    // function 1: HID descriptor register address
++                    If ((ToInteger (Arg2) == One))
++                    {
++                        Return (0x0001)
++                    }
+                 }
+ 
+                 Return (Buffer (One)
+@@ -542,23 +525,12 @@
+ 
+             Method (_STA, 0, NotSerialized)  // _STA: Status
+             {
+-                If ((TPDT == One))
+-                {
+-                    Return (0x0F)
+-                }
+-
+-                Return (Zero)
++                Return (0x0F)
+             }
+ 
+             Method (_CRS, 0, NotSerialized)  // _CRS: Current Resource Settings
+             {
+-                If ((DerefOf (TPTD [0x05]) == Zero))
+-                {
+-                    Return (ConcatenateResTemplate (I2CM (I2CX, BADR, SPED), G_IN (DerefOf (TPDI [Zero]), 
+-                        Zero, One, 0x02, Zero, Zero)))
+-                }
+-
+-                Return (ConcatenateResTemplate (I2CM (I2CX, BADR, SPED), SBFI))
++                Return (SBFB)
+             }
+         }
+ 
+@@ -584,7 +556,11 @@
+                     }
+             })
+             CreateWordField (SBGF, 0x17, INT1)
+-            INT1 = GNUM (0x001A088A)
++            // [VARIANT B] Removed the module-level "INT1 = GNUM (0x001A088A)":
++            // this is the root cause of the whole I2C_DEVT load failure (GNUM->GINF
++            // indexes the GPCS package at table-load time -> AE_AML_INTERNAL). NFC0
++            // has no Linux driver and this interrupt is not required, so dropping
++            // the module-level assignment lets the whole table load.
+             Method (_STA, 0, NotSerialized)  // _STA: Status
+             {
+                 If ((TPDT == One))
